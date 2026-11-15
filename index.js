@@ -137,6 +137,7 @@ app.post('/logs', async (req, res) => {
   return res.status(500).json({
     error: 'Failed to create log record',
     tokenLength: token.length,
+    tokenPreview: token ? `${token.slice(0, 2)}...${token.slice(-2)}` : 'EMPTY',
     detail: lastError?.response?.data || lastError?.message,
   });
 });
