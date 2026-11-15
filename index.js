@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ล้างเครื่องหมายคำพูดและช่องว่างที่อาจติดมากับ Environment Variables
 const getCleanToken = () =>
   (process.env.LOG_API_TOKEN || '').replace(/^["']|["']$/g, '').trim();
 
@@ -23,7 +22,7 @@ async function fetchDroneConfig(droneId) {
   return list.find((item) => Number(item.drone_id) === Number(droneId));
 }
 
-// 1. GET /configs/:droneId -> ส่งกลับเฉพาะ 5 ฟิลด์ตามโจทย์
+// 1. GET /configs/:droneId
 app.get('/configs/:droneId', async (req, res) => {
   try {
     const drone = await fetchDroneConfig(req.params.droneId);
@@ -37,12 +36,11 @@ app.get('/configs/:droneId', async (req, res) => {
       weight: Number(drone.weight),
     });
   } catch (error) {
-    console.error('CONFIG ERROR:', error.message);
     res.status(500).json({ error: 'Failed to fetch drone config', detail: error.message });
   }
 });
 
-// 2. GET /status/:droneId -> ส่งกลับเฉพาะ condition
+// 2. GET /status/:droneId
 app.get('/status/:droneId', async (req, res) => {
   try {
     const drone = await fetchDroneConfig(req.params.droneId);
@@ -56,23 +54,32 @@ app.get('/status/:droneId', async (req, res) => {
   }
 });
 
-// 3. GET /logs/:droneId -> ดึง Logs เรียงล่าสุดขึ้นก่อน จำกัด 12 รายการ + รองรับ Pagination (?page=1)
+// 3. GET /logs/:droneId
 app.get('/logs/:droneId', async (req, res) => {
-  try {
-    const droneId = Number(req.params.droneId);
-    const page = Number(req.query.page) || 1;
+  const droneId = Number(req.params.droneId);
+  const page = Number(req.query.page) || 1;
+  const url = getCleanUrl(process.env.LOG_URL);
+  const token = getCleanToken();
+  const params = {
+    filter: `(drone_id=${droneId})`,
+    sort: '-created',
+    perPage: 12,
+    page: page,
+  };
 
-    const response = await axios.get(getCleanUrl(process.env.LOG_URL), {
-      headers: {
-        Authorization: `Bearer ${getCleanToken()}`,
-      },
-      params: {
-        filter: `(drone_id=${droneId})`,
-        sort: '-created',
-        perPage: 12,
-        page: page,
-      },
-    });
+  try {
+    let response;
+    try {
+      response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+    } catch {
+      response = await axios.get(url, {
+        headers: { Authorization: token },
+        params,
+      });
+    }
 
     const items = response.data.items || [];
     const formattedLogs = items.map((log) => ({
@@ -85,7 +92,6 @@ app.get('/logs/:droneId', async (req, res) => {
 
     res.json(formattedLogs);
   } catch (error) {
-    console.error('GET LOGS ERROR:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Failed to fetch drone logs',
       detail: error.response?.data || error.message,
@@ -93,32 +99,42 @@ app.get('/logs/:droneId', async (req, res) => {
   }
 });
 
-// 4. POST /logs -> รับข้อมูลจากหน้าเว็บแล้วส่งต่อไปสร้าง Record ใหม่
+// 4. POST /logs
 app.post('/logs', async (req, res) => {
+  const { drone_id, drone_name, country, celsius } = req.body;
+  const url = getCleanUrl(process.env.LOG_URL);
+  const token = getCleanToken();
+
+  const payload = {
+    drone_id: Number(drone_id),
+    drone_name: String(drone_name),
+    country: String(country),
+    celsius: Number(celsius),
+  };
+
   try {
-    const { drone_id, drone_name, country, celsius } = req.body;
-
-    const payload = {
-      drone_id: Number(drone_id),
-      drone_name: String(drone_name),
-      country: String(country),
-      celsius: Number(celsius),
-    };
-
-    const response = await axios.post(getCleanUrl(process.env.LOG_URL), payload, {
+    const response = await axios.post(url, payload, {
       headers: {
-        Authorization: `Bearer ${getCleanToken()}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
-
-    res.status(201).json(response.data);
-  } catch (error) {
-    console.error('POST LOGS ERROR:', error.response?.data || error.message);
-    res.status(500).json({
-      error: 'Failed to create log record',
-      detail: error.response?.data || error.message,
-    });
+    return res.status(201).json(response.data);
+  } catch (firstError) {
+    try {
+      const retryResponse = await axios.post(url, payload, {
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+      });
+      return res.status(201).json(retryResponse.data);
+    } catch (secondError) {
+      return res.status(500).json({
+        error: 'Failed to create log record',
+        detail: secondError.response?.data || secondError.message,
+      });
+    }
   }
 });
 
