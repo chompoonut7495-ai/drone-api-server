@@ -118,23 +118,27 @@ app.post('/logs', async (req, res) => {
     celsius: Number(celsius),
   };
 
-  const authHeaders = [
-    { Authorization: `Bearer ${token}` },
-    { Authorization: token },
-    { token: token },
-    { 'api-key': token },
-    { 'x-api-key': token },
+  const attempts = [
+    { headers: { Authorization: `Bearer ${token}` } },
+    { headers: { Authorization: token } },
+    { headers: { 'x-token': token } },
+    { headers: { 'x-api-key': token } },
+    { headers: { apikey: token } },
+    { headers: { 'x-access-token': token } },
+    { headers: { 'x-auth-token': token } },
+    { params: { token } },
   ];
 
   let lastError = null;
 
-  for (const authHeader of authHeaders) {
+  for (const attempt of attempts) {
     try {
       const response = await axios.post(url, payload, {
         headers: {
-          ...authHeader,
+          ...(attempt.headers || {}),
           'Content-Type': 'application/json',
         },
+        params: attempt.params || {},
       });
       return res.status(201).json(response.data);
     } catch (err) {
@@ -144,12 +148,7 @@ app.post('/logs', async (req, res) => {
 
   return res.status(500).json({
     error: 'Failed to create log record',
-    receivedBody: req.body,
-    sentPayload: payload,
+    tokenUsed: token,
     detail: lastError?.response?.data || lastError?.message,
   });
-});
-
-app.listen(PORT, () => {
-  console.log(`API Server running on port ${PORT}`);
 });
