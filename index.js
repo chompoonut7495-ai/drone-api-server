@@ -152,3 +152,7 @@ app.post('/logs', async (req, res) => {
     detail: lastError?.response?.data || lastError?.message,
   });
 });
+
+app.listen(PORT, () => {
+  console.log(`API Server running on port ${PORT}`);
+});
