@@ -121,6 +121,8 @@ app.post('/logs', async (req, res) => {
   const authHeaders = [
     { Authorization: `Bearer ${token}` },
     { Authorization: token },
+    { token: token },
+    { 'api-key': token },
     { 'x-api-key': token },
   ];
 
@@ -142,8 +144,8 @@ app.post('/logs', async (req, res) => {
 
   return res.status(500).json({
     error: 'Failed to create log record',
-    tokenLength: token.length,
-    tokenPreview: token ? `${token.slice(0, 2)}...${token.slice(-2)}` : 'EMPTY',
+    receivedBody: req.body,
+    sentPayload: payload,
     detail: lastError?.response?.data || lastError?.message,
   });
 });
