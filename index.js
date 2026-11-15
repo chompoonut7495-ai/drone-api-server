@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ล้างเครื่องหมายคำพูดและช่องว่างที่อาจติดมากับ Environment Variables
 const getCleanToken = () =>
   (process.env.LOG_API_TOKEN || '').replace(/^["']|["']$/g, '').trim();
 
@@ -21,6 +22,11 @@ async function fetchDroneConfig(droneId) {
   const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
   return list.find((item) => Number(item.drone_id) === Number(droneId));
 }
+
+// หน้าแรกสำหรับเช็กสถานะเซิร์ฟเวอร์
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Drone API Server is running' });
+});
 
 // 1. GET /configs/:droneId
 app.get('/configs/:droneId', async (req, res) => {
@@ -140,4 +146,8 @@ app.post('/logs', async (req, res) => {
     tokenPreview: token ? `${token.slice(0, 2)}...${token.slice(-2)}` : 'EMPTY',
     detail: lastError?.response?.data || lastError?.message,
   });
+});
+
+app.listen(PORT, () => {
+  console.log(`API Server running on port ${PORT}`);
 });
