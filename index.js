@@ -9,9 +9,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ล้างเครื่องหมายคำพูดและช่องว่างที่อาจติดมากับ Environment Variables
+const getCleanToken = () =>
+  (process.env.LOG_API_TOKEN || '').replace(/^["']|["']$/g, '').trim();
+
+const getCleanUrl = (url) => (url || '').trim();
+
 // ฟังก์ชันช่วยดึงข้อมูลทั้งหมดจาก Drone Config Server
 async function fetchDroneConfig(droneId) {
-  const response = await axios.get(process.env.CONFIG_URL);
+  const response = await axios.get(getCleanUrl(process.env.CONFIG_URL));
   const raw = response.data;
   const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
   return list.find((item) => Number(item.drone_id) === Number(droneId));
@@ -46,7 +52,7 @@ app.get('/status/:droneId', async (req, res) => {
       condition: drone.condition,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch drone status' });
+    res.status(500).json({ error: 'Failed to fetch drone status', detail: error.message });
   }
 });
 
@@ -56,9 +62,9 @@ app.get('/logs/:droneId', async (req, res) => {
     const droneId = Number(req.params.droneId);
     const page = Number(req.query.page) || 1;
 
-    const response = await axios.get(process.env.LOG_URL, {
+    const response = await axios.get(getCleanUrl(process.env.LOG_URL), {
       headers: {
-        Authorization: `Bearer ${process.env.LOG_API_TOKEN}`,
+        Authorization: `Bearer ${getCleanToken()}`,
       },
       params: {
         filter: `(drone_id=${droneId})`,
@@ -79,7 +85,11 @@ app.get('/logs/:droneId', async (req, res) => {
 
     res.json(formattedLogs);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch drone logs' });
+    console.error('GET LOGS ERROR:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to fetch drone logs',
+      detail: error.response?.data || error.message,
+    });
   }
 });
 
@@ -90,21 +100,25 @@ app.post('/logs', async (req, res) => {
 
     const payload = {
       drone_id: Number(drone_id),
-      drone_name,
-      country,
+      drone_name: String(drone_name),
+      country: String(country),
       celsius: Number(celsius),
     };
 
-    const response = await axios.post(process.env.LOG_URL, payload, {
+    const response = await axios.post(getCleanUrl(process.env.LOG_URL), payload, {
       headers: {
-        Authorization: `Bearer ${process.env.LOG_API_TOKEN}`,
+        Authorization: `Bearer ${getCleanToken()}`,
         'Content-Type': 'application/json',
       },
     });
 
     res.status(201).json(response.data);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create log record' });
+    console.error('POST LOGS ERROR:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to create log record',
+      detail: error.response?.data || error.message,
+    });
   }
 });
 
